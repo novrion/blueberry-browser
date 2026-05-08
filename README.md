@@ -42,10 +42,9 @@ Also, there is no native-performance cross-platform local VM without barriers to
 
 ### Issues
 - MicroVM is still just an MVP.
-    - It does not have networking (only works on localhost for now).
+    - agent guest has no network so cannot install stuff (maybe this is okay though).
     - It does not have Jailer to ensure no agents can leak out of the VM.
     - No parameters are optimized.
-    - No auto-scaling with things like kubernetes.
     - No snapshotting...
 
 - No cloud-infra
