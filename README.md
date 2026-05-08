@@ -1,85 +1,54 @@
-# Blueberry Browser
+# Bluberry Coding Challenge
 
-> **⚠️ Disclaimer:** I'm not proud of this codebase! It was built in 3 hours. If you have some time left over in the challenge, feel free to refactor and clean things up!
+### Objective
+- AI has code execution sandbox
 
-https://github.com/user-attachments/assets/bbf939e2-d87c-4c77-ab7d-828259f6d28d
 
----
+### Solution
+- E2B + custom self-hosted MicroVM sandbox
+    - exposed via tools in a ToolLoopAgent (Vercel AI SDK)
+        - python (run python script)
+        - bash (run bash cmds)
+        - read_file
+        - write_file
+    - Either E2B is chosen, or MicroVM is
+    - custom FireCracker (FC) MicroVM had significantly faster boot time with 'warm up'
+        (let a few idle VMs run on standby and await claim -> ~1ms 'boot')
+        - on my machine boot is otherwise ~300ms (poor config, and no snaphotting which E2B uses)
+            (so we can likely get E2B speeds normally too)
+- Browser tools
+    - manipulate dom
+    - get page (HTML, text, or image)
+    - navigate (navigate page)
 
-## Overview
+### Sandbox Rationale
+Blueberry has no persistence and is completely local but a real agentic browser like Strawberry would have cloud infra \\
+=> chats and their files are already stored in the cloud => no gain from running sandbox on local machine. \\
+Also, there is no native-performance cross-platform local VM without barriers to installation (like requiring docker desktop) \\
+=> so the solution is to have a cloud-hosted linux machine that handles the cross-platform issue. \\
+=> adds network latency but is well worth it. If the agentic browser supported files in the GiB-range and required higher compute it would be nice with local compute, but there are major cross-platform issues and containerization issues. Better to abstract the sandbox as a network interface on the client-side instead.
 
-You are the **CTO of Blueberry Browser**, a Strawberry competitor. Your mission is to add a feature to Blueberry that makes it superior & more promising than Strawberry.
+**E2B**: Easy out-of-the-box industry-standard cloud-hosted code execution sandbox
+**FC MicroVM**: MVP has slower raw speeds but with some 'warming' ('idling'), it is WAY faster than E2B
+    + cheaper (cloud compute vs paying E2B 'service tax')
+    + more configurable to specific needs
+    + faster (also due to can have better network locality (closer to consumers i.e. server in Stockholm instead of being bottlenecked by E2B servers))
+    - more infra to handle
 
-But your time is limited—Strawberry is about to raise a two billion dollar Series A round from X-Separator, B17Å and Sequoiadendron giganteum Capital.
 
-## 🎯 Task
+### Issues
+- MicroVM is still just an MVP.
+    - It does not have networking (only works on localhost for now).
+    - It does not have Jailer to ensure no agents can leak out of the VM.
+    - No parameters are optimized.
+    - No auto-scaling with things like kubernetes.
+    - No snapshotting...
 
-Your job is to **clone this repo** and add a unique feature. Some ideas are listed below.
+- No cloud-infra
+    - MVP for this challenge ignored all auth, cloud-infra etc... purely localhost
 
-It doesn't need to work 100% reliably, or even be completely done. It just has to:
 
-- Show that you are creative and can iterate on novel ideas fast
-- Demonstrate good system thinking and code practices  
-- Prove you are a capable full stack and/or LLM dev
-
-Once you're done, we'll book a call where you'll get to present your work!
-
-If it's cracked, we might just have to acquire Blueberry Browser to stay alive 👀👀👀
-
-### ⏰ Time
-
-**1-2 weeks** is ideal for this challenge. This allows you to work over weekends and during evenings in your own time.
-
-### 📋 Rules
-
-You are allowed to vibe code, but make sure you understand everything so we can ask technical questions.
-
-## 💡 Feature Ideas
-
-### **Browsing History Compiler**
-Track the things that the user is doing inside the browser and figure out from a series of browser states what the user is doing, and perhaps how valuable, repetitive tasks can be re-run by an AI agent.
-
-*Tab state series → Prompt for web agent how to reproduce the work*
-
-### **Coding Agent**
-Sidebar coding agent that can create a script that can run on the open tabs.
-
-Maybe useful for filling forms or changing the page's style so it can extract data but present it in a nicer format.
-
-### **Tab Completion Model**
-Predict next action or what to type, like Cursor's tab completion model.
-
-### **Your Own Idea**
-Feel free to implement your own idea!
-
-> Wanted to try transformers.js for a while? This is your chance! 
-
-> Have an old cool web agent framework you built? Let's see if you can merge it into the browser!
-
-> Think you can add a completely new innovation to the browser concept with some insane, over-engineered React? Lfg!
-
-Make sure you can realistically showcase a simple version of it in the timeframe. You can double check with us first if uncertain! :)
-
-## 💬 Tips
-
-Feel free to write to us with questions or send updates during the process—it's a good way to get a feel for working together.
-
-It can also be a good way for us to give feedback if things are heading in the right or wrong direction.
-
----
-
-## 🚀 Project Setup
-
-### Install
-```bash
-$ pnpm install
-```
-
-### Development
-```bash
-$ pnpm dev
-```
-
-**Add an OpenAI API key to `.env`** in the root folder.
-
-Strawberry will reimburse LLM costs, so go crazy! *(Please not more than a few hundred dollars though!)*
+### TODO (if I were to continue)
+- optimize MicroVM solution crazy (I LOVE RUST <3 and (hopefully) diffing cloud providers)
+- all the cloud-infra stuff like handling file persistence, auth, db, buckets, MicroVM auth, MicroVM networking, and handling how best to load chat-files into MicroVM (let AI do it? auto-load on chat open?)
+- codebase standards are inconsistent. I have never built an electron app before so unsure how best to structure files. So a maintainability cleanup would be necessary here.
