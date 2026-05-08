@@ -68,6 +68,7 @@ interface ChatContextType {
   isLoading: boolean;
   toolCallsByMessage: Record<string, ToolCall[]>;
   activeMessageId: string | null;
+  userAttachments: SendAttachment[][];
 
   sendMessage: (
     content: string,
@@ -115,6 +116,9 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     Record<string, ToolCall[]>
   >({});
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [userAttachments, setUserAttachments] = useState<SendAttachment[][]>(
+    [],
+  );
   const activeMessageIdRef = useRef<string | null>(null);
 
   const setActive = (id: string | null): void => {
@@ -139,6 +143,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
   const sendMessage = useCallback(
     async (content: string, attachments?: SendAttachment[]): Promise<void> => {
       setIsLoading(true);
+      setUserAttachments((prev) => [...prev, attachments ?? []]);
       try {
         const messageId = Date.now().toString();
         setActive(messageId);
@@ -161,6 +166,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
       await window.sidebarAPI.clearChat();
       setMessages([]);
       setToolCallsByMessage({});
+      setUserAttachments([]);
       setActive(null);
     } catch (error) {
       console.error("Failed to clear chat:", error);
@@ -223,6 +229,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
               stderr: "",
               isComplete: false,
             });
+          } else if (event.args !== undefined) {
+            list[idx] = { ...list[idx], args: event.args };
           }
         } else if (event.kind === "tool-progress" && idx !== -1) {
           const cur = list[idx];
@@ -265,6 +273,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({
     isLoading,
     toolCallsByMessage,
     activeMessageId,
+    userAttachments,
     sendMessage,
     clearChat,
     getPageContent,

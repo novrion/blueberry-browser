@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { ChatProvider } from "./contexts/ChatContext";
-import { Chat } from "./components/Chat";
+import { Chat } from "./components/chat";
 import { useDarkMode } from "@common/hooks/useDarkMode";
 
 const SidebarContent: React.FC = () => {

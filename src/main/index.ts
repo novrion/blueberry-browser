@@ -1,9 +1,9 @@
 import { app, BrowserWindow } from "electron";
 import { electronApp } from "@electron-toolkit/utils";
-import { Window } from "./Window";
-import { AppMenu } from "./Menu";
-import { EventManager } from "./EventManager";
-import { shutdownSandbox } from "./ai";
+import { Window } from "./windows/Window";
+import { AppMenu } from "./windows/Menu";
+import { EventManager } from "./ipc/EventManager";
+import { shutdownSandbox } from "./services/ai";
 
 let mainWindow: Window | null = null;
 let eventManager: EventManager | null = null;
