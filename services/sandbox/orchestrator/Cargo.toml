@@ -1,0 +1,27 @@
+[package]
+name = "sandbox-orchestrator"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "sandbox-orchestrator"
+path = "src/main.rs"
+
+[dependencies]
+sandbox-proto = { path = "../proto" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+base64 = { workspace = true }
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"

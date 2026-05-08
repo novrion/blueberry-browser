@@ -1,0 +1,25 @@
+services:
+  sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: blueberry/sandbox:latest
+    container_name: blueberry-sandbox
+    restart: unless-stopped
+    devices:
+      - /dev/kvm:/dev/kvm
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./assets/vmlinux:/opt/sandbox/vmlinux:ro
+      - ./assets/rootfs.ext4:/opt/sandbox/rootfs.ext4:ro
+      - sandbox-work:/var/lib/sandbox
+    environment:
+      RUST_LOG: "info,sandbox_orchestrator=debug"
+      SANDBOX_BIND: "0.0.0.0:8080"
+      SANDBOX_VM_MEM_MIB: "512"
+      SANDBOX_VM_VCPUS: "1"
+      SANDBOX_MAX_VMS: "16"
+
+volumes:
+  sandbox-work:

@@ -1,0 +1,5 @@
+target/
+assets/vmlinux
+assets/rootfs.ext4
+*.log
+.work/

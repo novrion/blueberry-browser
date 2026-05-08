@@ -1,5 +1,6 @@
 import type { Sandbox, SandboxProvider } from "./types";
 import { E2BProvider } from "./e2b";
+import { MicroVmProvider } from "./microvm";
 
 export type { Sandbox, SandboxProvider, ExecResult, ExecOpts } from "./types";
 
@@ -10,6 +11,17 @@ let sandboxPromise: Promise<Sandbox> | null = null;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getProvider(): SandboxProvider {
+  const backend = (process.env.SANDBOX_BACKEND ?? "").toLowerCase();
+  const url = process.env.SANDBOX_URL;
+
+  if (backend === "microvm" || (backend === "" && url)) {
+    if (!url) throw new Error("SANDBOX_URL not set (microvm backend)");
+    return new MicroVmProvider({
+      baseUrl: url,
+      authToken: process.env.SANDBOX_TOKEN,
+    });
+  }
+
   const apiKey = process.env.E2B_API_KEY;
   if (!apiKey) throw new Error("E2B_API_KEY not set");
   return new E2BProvider(apiKey);
@@ -25,10 +37,13 @@ function scheduleIdleKill(): void {
 }
 
 function isSandboxGone(e: unknown): boolean {
+  if ((e as { isSandboxGone?: boolean })?.isSandboxGone) return true;
   const msg = String((e as Error)?.message ?? e).toLowerCase();
   return (
     msg.includes("sandbox was not found") ||
     msg.includes("sandbox not found") ||
+    msg.includes("vm_gone") ||
+    msg.includes("not_found") ||
     (msg.includes("sandbox") && msg.includes("timeout"))
   );
 }
