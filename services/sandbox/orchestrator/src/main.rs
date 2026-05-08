@@ -27,6 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     let registry = Arc::new(Registry::new(cfg.clone()));
     registry.spawn_idle_reaper();
+    registry.warmup();
 
     let app = routes::router(registry.clone());
     let listener = tokio::net::TcpListener::bind(&cfg.bind_addr)

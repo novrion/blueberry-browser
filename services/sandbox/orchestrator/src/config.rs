@@ -15,6 +15,7 @@ pub struct Config {
     pub vm_mem_mib: u32,
     pub vm_vcpus: u8,
     pub max_vms: usize,
+    pub pool_size: usize,
     pub default_timeout: Duration,
     pub max_timeout: Duration,
 }
@@ -50,6 +51,7 @@ impl Config {
             vm_mem_mib: env_u64("SANDBOX_VM_MEM_MIB", 512) as u32,
             vm_vcpus: env_u64("SANDBOX_VM_VCPUS", 1) as u8,
             max_vms: env_u64("SANDBOX_MAX_VMS", 32) as usize,
+            pool_size: env_u64("SANDBOX_POOL_SIZE", 2) as usize,
             default_timeout: Duration::from_secs(env_u64("SANDBOX_DEFAULT_TIMEOUT_S", 30)),
             max_timeout: Duration::from_secs(env_u64("SANDBOX_MAX_TIMEOUT_S", 600)),
         })
