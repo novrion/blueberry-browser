@@ -4,9 +4,18 @@ import { executeSandbox } from "../../lib/sandbox";
 
 export const bashTool = tool({
   title: "bash",
-  description:
-    "Run a shell command in the sandboxed Linux microVM. Returns stdout, stderr, and exit code. " +
-    "Use for filesystem ops, package installs (`pip install`, `apt-get`), invoking CLIs (ffmpeg, curl, jq).",
+  description: [
+    "Run a shell command in the sandboxed Linux microVM (Alpine). Returns stdout, stderr, and exit code.",
+    "The VM is isolated and **cannot install new packages** — only the pre-installed tools below are available.",
+    "Available tools:",
+    "shell/core (bash, coreutils, findutils, grep, sed, gawk),",
+    "network (curl, wget, ca-certificates, iproute2),",
+    "vcs (git),",
+    "data (jq, sqlite, file),",
+    "archive (tar, gzip, xz, zip, unzip),",
+    "media (imagemagick, poppler-utils — pdftotext/pdfinfo/pdftoppm),",
+    "python3 (see `python` tool for libs).",
+  ].join(" "),
   inputSchema: z.object({
     cmd: z
       .string()

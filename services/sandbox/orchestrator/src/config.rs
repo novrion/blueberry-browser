@@ -45,7 +45,7 @@ impl Config {
             rootfs_path: env_path("SANDBOX_ROOTFS", "/opt/sandbox/rootfs.ext4"),
             boot_args: env_or(
                 "SANDBOX_BOOT_ARGS",
-                "console=ttyS0 reboot=k panic=1 pci=off random.trust_cpu=on quiet",
+                "console=ttyS0 reboot=k panic=1 pci=off random.trust_cpu=on quiet init=/init",
             ),
             vm_mem_mib: env_u64("SANDBOX_VM_MEM_MIB", 512) as u32,
             vm_vcpus: env_u64("SANDBOX_VM_VCPUS", 1) as u8,

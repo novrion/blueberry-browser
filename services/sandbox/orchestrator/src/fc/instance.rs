@@ -102,7 +102,6 @@ pub async fn boot(cfg: &Config, id: Uuid) -> Result<FcInstance> {
         &json!({
             "guest_cid": GUEST_CID,
             "uds_path": vsock_sock.to_string_lossy(),
-            "vsock_id": "agent",
         }),
     )
     .await?;
@@ -122,7 +121,7 @@ pub async fn boot(cfg: &Config, id: Uuid) -> Result<FcInstance> {
     };
 
     let client = VsockClient::new(inst.vsock_sock.clone());
-    client.wait_ready(Duration::from_secs(15)).await?;
+    client.wait_ready(Duration::from_secs(30)).await?;
     Ok(inst)
 }
 

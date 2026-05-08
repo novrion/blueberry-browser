@@ -91,15 +91,15 @@ EOF
       py3-tabulate \
       py3-tqdm \
       py3-dateutil \
-      py3-pytz \
       py3-six
   '
 
 # Install agent
 install -Dm0755 "$AGENT_BIN" "$ROOTFS_DIR/usr/local/bin/sandbox-agent"
 
-# Init: bring up filesystems, set hostname, then exec agent as PID-1 supervisor.
-cat > "$ROOTFS_DIR/sbin/init" <<'INIT'
+# Custom PID-1 at /init (boot_args: init=/init). Bypasses Alpine OpenRC entirely.
+# Bring up filesystems, set hostname, then exec agent as supervisor.
+cat > "$ROOTFS_DIR/init" <<'INIT'
 #!/bin/sh
 mount -t proc  proc  /proc 2>/dev/null || true
 mount -t sysfs sys   /sys  2>/dev/null || true
@@ -118,7 +118,7 @@ while :; do
   sleep 1
 done
 INIT
-chmod 0755 "$ROOTFS_DIR/sbin/init"
+chmod 0755 "$ROOTFS_DIR/init"
 
 # Create a /work scratch dir for user code
 mkdir -p "$ROOTFS_DIR/work"

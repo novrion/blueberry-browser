@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { type ToolCall } from "../../contexts/ChatContext";
 import { cn } from "@common/lib/utils";
@@ -119,11 +119,24 @@ const ToolRow: React.FC<{ call: ToolCall }> = ({ call }) => {
 
 export const ToolsSummary: React.FC<{ calls: ToolCall[] }> = ({ calls }) => {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const completed = calls.filter((c) => c.isComplete);
+
+  useEffect(() => {
+    if (completed.length === 0) return;
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, [completed.length]);
+
   if (completed.length === 0) return null;
 
   return (
-    <div className="mb-3">
+    <div
+      className={cn(
+        "mb-3 transition-all duration-300 ease-out",
+        mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1",
+      )}
+    >
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"

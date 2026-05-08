@@ -1,8 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { type ToolCall } from "../../contexts/ChatContext";
 import { cn } from "@common/lib/utils";
 import { getToolMeta } from "../../lib/toolMeta";
+
+const MIN_DISPLAY_MS = 700;
+const FADE_MS = 220;
 
 const Detail: React.FC<{ call: ToolCall }> = ({ call }) => {
   const args = (call.args ?? {}) as Record<string, unknown>;
@@ -39,26 +42,62 @@ const CodeBlock: React.FC<{ content: string }> = ({ content }) => (
   </pre>
 );
 
+type Phase = "enter" | "visible" | "leaving" | "gone";
+
 export const ToolCallCard: React.FC<{ call: ToolCall }> = ({ call }) => {
   const [open, setOpen] = useState(false);
+  const [phase, setPhase] = useState<Phase>("enter");
+  const startRef = useRef(Date.now());
 
-  if (call.isComplete) return null;
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setPhase("visible"));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  useEffect(() => {
+    if (!call.isComplete) return;
+    const elapsed = Date.now() - startRef.current;
+    const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed);
+    const t1 = setTimeout(() => setPhase("leaving"), remaining);
+    const t2 = setTimeout(() => setPhase("gone"), remaining + FADE_MS);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [call.isComplete]);
+
+  if (phase === "gone") return null;
 
   const meta = getToolMeta(call.toolName);
   const Icon = meta.icon;
+  const isLeaving = phase === "leaving";
+  const isEntering = phase === "enter";
 
   return (
-    <div className="my-1">
+    <div
+      style={{ transitionDuration: `${FADE_MS}ms` }}
+      className={cn(
+        "transition-all ease-out overflow-hidden",
+        isEntering && "opacity-0 max-h-0 my-0 -translate-y-0.5",
+        phase === "visible" && "opacity-100 max-h-96 my-1 translate-y-0",
+        isLeaving && "opacity-0 max-h-0 my-0 -translate-y-0.5",
+      )}
+    >
       <button
         onClick={() => setOpen(!open)}
+        disabled={isLeaving}
         className="flex items-center gap-2 hover:opacity-70 transition-opacity"
       >
         <Icon className="size-4 text-muted-foreground shrink-0" />
         <span
-          className="text-sm font-medium bg-clip-text text-transparent bg-[length:200%_100%] animate-shimmer
-                     bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground"
+          className={cn(
+            "text-sm font-medium bg-clip-text text-transparent bg-[length:200%_100%]",
+            "bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground",
+            !call.isComplete && "animate-shimmer",
+            call.isComplete && "opacity-80",
+          )}
         >
-          {meta.runningLabel}...
+          {call.isComplete ? meta.doneLabel : `${meta.runningLabel}...`}
         </span>
         <ChevronDown
           className={cn(

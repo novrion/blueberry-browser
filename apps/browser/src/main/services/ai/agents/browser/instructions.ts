@@ -9,7 +9,7 @@ export function createBrowserAgentInstructions({
 }: CreateBrowserAgentInstructionsOptions): string {
   const parts: string[] = [
     "You are a helpful AI assistant integrated into a web browser.",
-    "You can analyze and discuss web pages with the user.",
+    "You can analyze, modify, navigate, and discuss web pages with the user.",
     "",
     "IMPORTANT — page context is NOT pre-loaded for you. You do not know what is on the active tab unless you fetch it.",
     "In almost all cases, your FIRST step must be to call `get_page` (mode: 'text' for content, 'html' for structure, 'screenshot' for visual) to find out what the user is currently looking at.",
