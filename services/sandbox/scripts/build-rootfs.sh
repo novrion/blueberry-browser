@@ -51,17 +51,48 @@ CID=$(docker create "alpine:$ALPINE_VER")
 docker export "$CID" | tar -x -C "$ROOTFS_DIR"
 docker rm "$CID" >/dev/null
 
-# Install runtime packages inside the rootfs via chroot in a throwaway container
+# Install runtime packages inside the rootfs via chroot in a throwaway container.
+# Pulls from the community repo for the data-science Python wheels.
 docker run --rm \
   -v "$ROOTFS_DIR":/rootfs \
   "alpine:$ALPINE_VER" sh -c '
+    set -e
+    cat > /rootfs/etc/apk/repositories <<EOF
+http://dl-cdn.alpinelinux.org/alpine/v'"$ALPINE_VER"'/main
+http://dl-cdn.alpinelinux.org/alpine/v'"$ALPINE_VER"'/community
+EOF
     apk --root /rootfs --update-cache --initdb add \
       alpine-baselayout busybox openrc \
-      bash coreutils \
-      python3 py3-pip \
-      ca-certificates curl \
+      bash coreutils findutils grep sed gawk \
+      ca-certificates curl wget \
       iproute2 \
-      tzdata
+      tzdata \
+      git \
+      jq \
+      file \
+      tar gzip xz zip unzip \
+      sqlite \
+      ffmpeg-libs \
+      imagemagick \
+      poppler-utils \
+      python3 py3-pip \
+      py3-numpy \
+      py3-pandas \
+      py3-scipy \
+      py3-matplotlib \
+      py3-pillow \
+      py3-openpyxl \
+      py3-xlsxwriter \
+      py3-requests \
+      py3-beautifulsoup4 \
+      py3-lxml \
+      py3-yaml \
+      py3-jinja2 \
+      py3-tabulate \
+      py3-tqdm \
+      py3-dateutil \
+      py3-pytz \
+      py3-six
   '
 
 # Install agent
