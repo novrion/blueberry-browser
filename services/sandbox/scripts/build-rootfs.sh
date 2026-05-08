@@ -83,9 +83,11 @@ EOF
       py3-pillow \
       py3-openpyxl \
       py3-xlsxwriter \
+      py3-xlrd \
       py3-requests \
       py3-beautifulsoup4 \
       py3-lxml \
+      py3-html5lib \
       py3-yaml \
       py3-jinja2 \
       py3-tabulate \

@@ -1,9 +1,6 @@
 import { ToolLoopAgent, stepCountIs, type LanguageModel } from "ai";
 import { createBrowserAgentInstructions } from "./instructions";
-import {
-	getToolInstructions,
-	getBrowserToolInstructions,
-} from "../../instructions";
+import { getToolInstructions } from "../../instructions";
 import { sandboxTools, createBrowserTools } from "../../tools";
 import type { Tab } from "../../../../windows/Tab";
 

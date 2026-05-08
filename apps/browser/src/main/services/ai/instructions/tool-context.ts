@@ -33,7 +33,20 @@ export function getToolInstructions(tools: ToolSet): string[] {
 		const parts = [
 			"===== **Sandbox tools** =====",
 			"— execute code in an isolated VM (user uploaded files are already in the VM)",
-			"\n",
+			"",
+			"User-uploaded files live at `/work/`. Reference them by absolute path (e.g. `/work/data.xlsx`).",
+			"The VM is **isolated and immutable** — you CANNOT install new packages (no `pip install`, no `apk add`, no network installs).",
+			"If a Python lib is missing, it is not coming. Do NOT loop trying to install it. Use a different lib from the available list, or fall back to a non-Python tool (poppler-utils, imagemagick, jq, sqlite) via `bash`.",
+			"",
+			"File-format guidance (avoid common dead ends):",
+			"- `.xlsx` → `pd.read_excel(path)` (engine: openpyxl). It IS a zip; `unzip -l` works.",
+			"- `.xls` (legacy) → `pd.read_excel(path)` (engine: xlrd, installed). It is OLE2/CFB binary — `unzip` will NOT work, do not try.",
+			"- `.csv` / `.tsv` → `pd.read_csv(path, sep=...)`.",
+			"- `.html` tables → `pd.read_html(path)` (html5lib installed).",
+			"- `.pdf` → `pdftotext` / `pdfinfo` / `pdftoppm` (poppler-utils) via `bash`. Don't `strings` PDFs.",
+			"- `.json` / `.yaml` → stdlib `json` / `yaml`.",
+			"- Don't run `strings | grep` on structured binaries to extract data — use the proper parser.",
+			"",
 		];
 		for (const part of parts) {
 			instructions.push(part);

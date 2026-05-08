@@ -20,11 +20,11 @@ export function createBrowserAgentInstructions({
   if (url) parts.push(`\nCurrent page URL: ${url}`);
 
   if (toolInstructions && toolInstructions.length > 0) {
-    parts.push("\n\n========== TOOLS ==========");
+    parts.push("\n");
     for (const instruction of toolInstructions) {
       parts.push(instruction);
     }
-    parts.push("\n\n");
+    parts.push("\n");
   }
 
   parts.push(
