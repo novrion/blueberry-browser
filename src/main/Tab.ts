@@ -1,4 +1,4 @@
-import { NativeImage, WebContentsView } from "electron";
+import { NativeImage, WebContents, WebContentsView } from "electron";
 
 export class Tab {
   private webContentsView: WebContentsView;
@@ -62,7 +62,7 @@ export class Tab {
     return this._isVisible;
   }
 
-  get webContents() {
+  get webContents(): WebContents {
     return this.webContentsView.webContents;
   }
 
@@ -85,16 +85,20 @@ export class Tab {
     return await this.webContentsView.webContents.capturePage();
   }
 
-  async runJs(code: string): Promise<any> {
+  async runJs(code: string): Promise<unknown> {
     return await this.webContentsView.webContents.executeJavaScript(code);
   }
 
   async getTabHtml(): Promise<string> {
-    return await this.runJs("return document.documentElement.outerHTML");
+    return (await this.runJs(
+      "return document.documentElement.outerHTML",
+    )) as string;
   }
 
   async getTabText(): Promise<string> {
-    return await this.runJs("return document.documentElement.innerText");
+    return (await this.runJs(
+      "return document.documentElement.innerText",
+    )) as string;
   }
 
   loadURL(url: string): Promise<void> {

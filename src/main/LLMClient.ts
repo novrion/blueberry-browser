@@ -1,17 +1,41 @@
 import { WebContents } from "electron";
-import { streamText, type LanguageModel, type CoreMessage } from "ai";
+import type { LanguageModel, ModelMessage, UserContent } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
+import { google } from "@ai-sdk/google";
 import * as dotenv from "dotenv";
 import { join } from "path";
 import type { Window } from "./Window";
+import { ToolRegistry, runAgent } from "@blueberry/agent-core";
+import {
+  E2BSandboxProvider,
+  SandboxManager,
+  createPythonTool,
+  createBashTool,
+  createReadFileTool,
+  createWriteFileTool,
+} from "@blueberry/tools-sandbox";
 
 // Load environment variables from .env file
 dotenv.config({ path: join(__dirname, "../../.env") });
 
+// `@ai-sdk/google` reads GOOGLE_GENERATIVE_AI_API_KEY internally.
+// Forward GEMINI_API_KEY into it so callers only need to set GEMINI_API_KEY.
+if (process.env.GEMINI_API_KEY) {
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GEMINI_API_KEY;
+}
+
+interface Attachment {
+  name: string;
+  mime: string;
+  size: number;
+  base64: string;
+}
+
 interface ChatRequest {
   message: string;
   messageId: string;
+  attachments?: Attachment[];
 }
 
 interface StreamChunk {
@@ -19,15 +43,42 @@ interface StreamChunk {
   isComplete: boolean;
 }
 
-type LLMProvider = "openai" | "anthropic";
+type LLMProvider = "openai" | "anthropic" | "google";
 
 const DEFAULT_MODELS: Record<LLMProvider, string> = {
   openai: "gpt-4o-mini",
   anthropic: "claude-3-5-sonnet-20241022",
+  google: "gemini-3-flash-preview",
 };
 
 const MAX_CONTEXT_LENGTH = 4000;
 const DEFAULT_TEMPERATURE = 0.7;
+const DEFAULT_SESSION_ID = "default";
+
+let sharedSandboxManager: SandboxManager | null = null;
+
+function getOrInitSandboxManager(): SandboxManager | null {
+  if (sharedSandboxManager) return sharedSandboxManager;
+  const apiKey = process.env.E2B_API_KEY;
+  if (!apiKey) {
+    console.warn(
+      "⚠️  E2B_API_KEY not set — python tool disabled. Add E2B_API_KEY to .env to enable code execution.",
+    );
+    return null;
+  }
+  sharedSandboxManager = new SandboxManager({
+    provider: new E2BSandboxProvider({ apiKey }),
+    idleTimeoutMs: 10 * 60 * 1000,
+  });
+  return sharedSandboxManager;
+}
+
+export function shutdownSandboxManager(): Promise<void> {
+  if (!sharedSandboxManager) return Promise.resolve();
+  const m = sharedSandboxManager;
+  sharedSandboxManager = null;
+  return m.killAll();
+}
 
 export class LLMClient {
   private readonly webContents: WebContents;
@@ -35,18 +86,19 @@ export class LLMClient {
   private readonly provider: LLMProvider;
   private readonly modelName: string;
   private readonly model: LanguageModel | null;
-  private messages: CoreMessage[] = [];
+  private readonly registry: ToolRegistry;
+  private messages: ModelMessage[] = [];
 
   constructor(webContents: WebContents) {
     this.webContents = webContents;
     this.provider = this.getProvider();
     this.modelName = this.getModelName();
     this.model = this.initializeModel();
+    this.registry = this.buildToolRegistry();
 
     this.logInitializationStatus();
   }
 
-  // Set the window reference after construction to avoid circular dependencies
   setWindow(window: Window): void {
     this.window = window;
   }
@@ -54,7 +106,8 @@ export class LLMClient {
   private getProvider(): LLMProvider {
     const provider = process.env.LLM_PROVIDER?.toLowerCase();
     if (provider === "anthropic") return "anthropic";
-    return "openai"; // Default to OpenAI
+    if (provider === "google" || provider === "gemini") return "google";
+    return "openai";
   }
 
   private getModelName(): string {
@@ -70,6 +123,8 @@ export class LLMClient {
         return anthropic(this.modelName);
       case "openai":
         return openai(this.modelName);
+      case "google":
+        return google(this.modelName);
       default:
         return null;
     }
@@ -81,29 +136,47 @@ export class LLMClient {
         return process.env.ANTHROPIC_API_KEY;
       case "openai":
         return process.env.OPENAI_API_KEY;
+      case "google":
+        return process.env.GEMINI_API_KEY;
       default:
         return undefined;
     }
   }
 
+  private buildToolRegistry(): ToolRegistry {
+    const registry = new ToolRegistry();
+    const manager = getOrInitSandboxManager();
+    if (manager) {
+      registry.register(createPythonTool(manager));
+      registry.register(createBashTool(manager));
+      registry.register(createReadFileTool(manager));
+      registry.register(createWriteFileTool(manager));
+    }
+    return registry;
+  }
+
   private logInitializationStatus(): void {
     if (this.model) {
+      const tools =
+        this.registry
+          .list()
+          .map((t) => t.name)
+          .join(", ") || "none";
       console.log(
-        `✅ LLM Client initialized with ${this.provider} provider using model: ${this.modelName}`
+        `✅ LLM Client initialized with ${this.provider} provider using model: ${this.modelName}. Tools: ${tools}`,
       );
     } else {
       const keyName =
         this.provider === "anthropic" ? "ANTHROPIC_API_KEY" : "OPENAI_API_KEY";
       console.error(
         `❌ LLM Client initialization failed: ${keyName} not found in environment variables.\n` +
-          `Please add your API key to the .env file in the project root.`
+          `Please add your API key to the .env file in the project root.`,
       );
     }
   }
 
   async sendChatMessage(request: ChatRequest): Promise<void> {
     try {
-      // Get screenshot from active tab if available
       let screenshot: string | null = null;
       if (this.window) {
         const activeTab = this.window.activeTab;
@@ -117,48 +190,99 @@ export class LLMClient {
         }
       }
 
-      // Build user message content with screenshot first, then text
-      const userContent: any[] = [];
-      
-      // Add screenshot as the first part if available
+      const writtenFiles = await this.persistAttachmentsToSandbox(
+        request.attachments,
+      );
+
+      const userContent: UserContent = [];
       if (screenshot) {
-        userContent.push({
-          type: "image",
-          image: screenshot,
-        });
+        userContent.push({ type: "image", image: screenshot });
       }
-      
-      // Add text content
-      userContent.push({
-        type: "text",
-        text: request.message,
-      });
 
-      // Create user message in CoreMessage format
-      const userMessage: CoreMessage = {
+      // Inline image attachments so the LLM can see them directly.
+      if (request.attachments) {
+        for (const a of request.attachments) {
+          if (a.mime.startsWith("image/")) {
+            userContent.push({
+              type: "image",
+              image: `data:${a.mime};base64,${a.base64}`,
+            });
+          }
+        }
+      }
+
+      const messageText = this.composeUserText(request.message, writtenFiles);
+      userContent.push({ type: "text", text: messageText });
+
+      const userMessage: ModelMessage = {
         role: "user",
-        content: userContent.length === 1 ? request.message : userContent,
+        content: userContent.length === 1 ? messageText : userContent,
       };
-      
-      this.messages.push(userMessage);
 
-      // Send updated messages to renderer
+      this.messages.push(userMessage);
       this.sendMessagesToRenderer();
 
       if (!this.model) {
         this.sendErrorMessage(
           request.messageId,
-          "LLM service is not configured. Please add your API key to the .env file."
+          "LLM service is not configured. Please add your API key to the .env file.",
         );
         return;
       }
 
-      const messages = await this.prepareMessagesWithContext(request);
-      await this.streamResponse(messages, request.messageId);
+      const messages = await this.prepareMessagesWithContext();
+      await this.runAgentLoop(messages, request.messageId);
     } catch (error) {
       console.error("Error in LLM request:", error);
       this.handleStreamError(error, request.messageId);
     }
+  }
+
+  private composeUserText(
+    original: string,
+    written: { path: string; size: number; mime: string }[],
+  ): string {
+    if (written.length === 0) return original;
+    const lines = written
+      .map((w) => `- ${w.path} (${w.mime}, ${w.size} bytes)`)
+      .join("\n");
+    const note = `\n\n[Attached files written to the sandbox /work/ directory:\n${lines}\nUse the read_file or bash tools to access them.]`;
+    return original ? `${original}${note}` : note.trimStart();
+  }
+
+  private async persistAttachmentsToSandbox(
+    attachments: Attachment[] | undefined,
+  ): Promise<{ path: string; size: number; mime: string }[]> {
+    if (!attachments || attachments.length === 0) return [];
+    const manager = getOrInitSandboxManager();
+    if (!manager) {
+      console.warn(
+        "Attachments received but no sandbox available — files will only be referenced by name.",
+      );
+      return attachments.map((a) => ({
+        path: `/work/${a.name}`,
+        size: a.size,
+        mime: a.mime,
+      }));
+    }
+    const sb = await manager.getOrCreate(DEFAULT_SESSION_ID);
+    const written: { path: string; size: number; mime: string }[] = [];
+    for (const a of attachments) {
+      const safeName = a.name.replace(/[^\w.-]/g, "_");
+      const path = `/work/${safeName}`;
+      try {
+        const buf = Buffer.from(a.base64, "base64");
+        await sb.writeFile(
+          path,
+          new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength),
+        );
+        written.push({ path, size: a.size, mime: a.mime });
+      } catch (err) {
+        console.error(`Failed to write attachment ${a.name}:`, err);
+      }
+    }
+    manager.touch(DEFAULT_SESSION_ID);
+    return written;
   }
 
   clearMessages(): void {
@@ -166,7 +290,7 @@ export class LLMClient {
     this.sendMessagesToRenderer();
   }
 
-  getMessages(): CoreMessage[] {
+  getMessages(): ModelMessage[] {
     return this.messages;
   }
 
@@ -174,11 +298,10 @@ export class LLMClient {
     this.webContents.send("chat-messages-updated", this.messages);
   }
 
-  private async prepareMessagesWithContext(_request: ChatRequest): Promise<CoreMessage[]> {
-    // Get page context from active tab
+  private async prepareMessagesWithContext(): Promise<ModelMessage[]> {
     let pageUrl: string | null = null;
     let pageText: string | null = null;
-    
+
     if (this.window) {
       const activeTab = this.window.activeTab;
       if (activeTab) {
@@ -191,35 +314,54 @@ export class LLMClient {
       }
     }
 
-    // Build system message
-    const systemMessage: CoreMessage = {
+    const systemMessage: ModelMessage = {
       role: "system",
       content: this.buildSystemPrompt(pageUrl, pageText),
     };
 
-    // Include all messages in history (system + conversation)
     return [systemMessage, ...this.messages];
   }
 
-  private buildSystemPrompt(url: string | null, pageText: string | null): string {
+  private buildSystemPrompt(
+    url: string | null,
+    pageText: string | null,
+  ): string {
     const parts: string[] = [
       "You are a helpful AI assistant integrated into a web browser.",
       "You can analyze and discuss web pages with the user.",
       "The user's messages may include screenshots of the current page as the first image.",
     ];
 
-    if (url) {
-      parts.push(`\nCurrent page URL: ${url}`);
+    const toolNames = new Set(this.registry.list().map((t) => t.name));
+    if (toolNames.has("python") || toolNames.has("bash")) {
+      parts.push(
+        "\nYou have a sandboxed Linux microVM available via these tools:",
+        toolNames.has("python")
+          ? "- `python(code)` runs Python (stdlib + pandas, numpy, etc.)."
+          : "",
+        toolNames.has("bash")
+          ? "- `bash(cmd)` runs shell commands. Use for filesystem ops, package installs, CLIs."
+          : "",
+        toolNames.has("read_file")
+          ? "- `read_file(path)` reads a file from the sandbox."
+          : "",
+        toolNames.has("write_file")
+          ? "- `write_file(path, content)` writes a file in the sandbox."
+          : "",
+        "The sandbox's `/work` directory persists across calls within this chat session.",
+      );
     }
 
+    if (url) parts.push(`\nCurrent page URL: ${url}`);
     if (pageText) {
-      const truncatedText = this.truncateText(pageText, MAX_CONTEXT_LENGTH);
-      parts.push(`\nPage content (text):\n${truncatedText}`);
+      parts.push(
+        `\nPage content (text):\n${this.truncateText(pageText, MAX_CONTEXT_LENGTH)}`,
+      );
     }
 
     parts.push(
-      "\nPlease provide helpful, accurate, and contextual responses about the current webpage.",
-      "If the user asks about specific content, refer to the page content and/or screenshot provided."
+      "\nProvide helpful, accurate, and contextual responses about the current webpage.",
+      "If the user asks about specific content, refer to the page content and/or screenshot provided.",
     );
 
     return parts.join("\n");
@@ -230,69 +372,73 @@ export class LLMClient {
     return text.substring(0, maxLength) + "...";
   }
 
-  private async streamResponse(
-    messages: CoreMessage[],
-    messageId: string
+  private async runAgentLoop(
+    messages: ModelMessage[],
+    messageId: string,
   ): Promise<void> {
-    if (!this.model) {
-      throw new Error("Model not initialized");
-    }
+    if (!this.model) throw new Error("Model not initialized");
 
-    try {
-      const result = await streamText({
-        model: this.model,
-        messages,
-        temperature: DEFAULT_TEMPERATURE,
-        maxRetries: 3,
-        abortSignal: undefined, // Could add abort controller for cancellation
-      });
-
-      await this.processStream(result.textStream, messageId);
-    } catch (error) {
-      throw error; // Re-throw to be handled by the caller
-    }
-  }
-
-  private async processStream(
-    textStream: AsyncIterable<string>,
-    messageId: string
-  ): Promise<void> {
     let accumulatedText = "";
-
-    // Create a placeholder assistant message
-    const assistantMessage: CoreMessage = {
-      role: "assistant",
-      content: "",
-    };
-    
-    // Keep track of the index for updates
     const messageIndex = this.messages.length;
-    this.messages.push(assistantMessage);
+    this.messages.push({ role: "assistant", content: "" });
 
-    for await (const chunk of textStream) {
-      accumulatedText += chunk;
-
-      // Update assistant message content
+    const flushAssistant = (): void => {
       this.messages[messageIndex] = {
         role: "assistant",
         content: accumulatedText,
       };
       this.sendMessagesToRenderer();
+    };
 
-      this.sendStreamChunk(messageId, {
-        content: chunk,
-        isComplete: false,
-      });
+    const result = await runAgent({
+      model: this.model,
+      messages,
+      registry: this.registry,
+      sessionId: DEFAULT_SESSION_ID,
+      temperature: DEFAULT_TEMPERATURE,
+      maxSteps: 5,
+      onTextChunk: (chunk) => {
+        accumulatedText += chunk;
+        flushAssistant();
+        this.sendStreamChunk(messageId, {
+          content: chunk,
+          isComplete: false,
+        });
+      },
+      onToolCall: (e) => {
+        this.webContents.send("agent-tool-event", {
+          kind: "tool-call",
+          messageId,
+          toolCallId: e.toolCallId,
+          toolName: e.toolName,
+          args: e.args,
+        });
+      },
+      onToolResult: (e) => {
+        this.webContents.send("agent-tool-event", {
+          kind: "tool-result",
+          messageId,
+          toolCallId: e.toolCallId,
+          toolName: e.toolName,
+          result: e.result,
+          isError: e.isError,
+        });
+      },
+      onToolProgress: (toolCallId, p) => {
+        this.webContents.send("agent-tool-event", {
+          kind: "tool-progress",
+          messageId,
+          toolCallId,
+          progress: p,
+        });
+      },
+    });
+
+    if (!accumulatedText) {
+      accumulatedText = result.finalText;
+      flushAssistant();
     }
 
-    // Final update with complete content
-    this.messages[messageIndex] = {
-      role: "assistant",
-      content: accumulatedText,
-    };
-    this.sendMessagesToRenderer();
-
-    // Send the final complete signal
     this.sendStreamChunk(messageId, {
       content: accumulatedText,
       isComplete: true,
@@ -301,26 +447,20 @@ export class LLMClient {
 
   private handleStreamError(error: unknown, messageId: string): void {
     console.error("Error streaming from LLM:", error);
-
-    const errorMessage = this.getErrorMessage(error);
-    this.sendErrorMessage(messageId, errorMessage);
+    this.sendErrorMessage(messageId, this.getErrorMessage(error));
   }
 
   private getErrorMessage(error: unknown): string {
     if (!(error instanceof Error)) {
       return "An unexpected error occurred. Please try again.";
     }
-
     const message = error.message.toLowerCase();
-
     if (message.includes("401") || message.includes("unauthorized")) {
       return "Authentication error: Please check your API key in the .env file.";
     }
-
     if (message.includes("429") || message.includes("rate limit")) {
       return "Rate limit exceeded. Please try again in a few moments.";
     }
-
     if (
       message.includes("network") ||
       message.includes("fetch") ||
@@ -328,11 +468,9 @@ export class LLMClient {
     ) {
       return "Network error: Please check your internet connection.";
     }
-
     if (message.includes("timeout")) {
       return "Request timeout: The service took too long to respond. Please try again.";
     }
-
     return "Sorry, I encountered an error while processing your request. Please try again.";
   }
 

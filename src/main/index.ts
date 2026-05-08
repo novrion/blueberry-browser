@@ -3,6 +3,7 @@ import { electronApp } from "@electron-toolkit/utils";
 import { Window } from "./Window";
 import { AppMenu } from "./Menu";
 import { EventManager } from "./EventManager";
+import { shutdownSandboxManager } from "./LLMClient";
 
 let mainWindow: Window | null = null;
 let eventManager: EventManager | null = null;
@@ -46,4 +47,14 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", async (event) => {
+  event.preventDefault();
+  try {
+    await shutdownSandboxManager();
+  } catch (e) {
+    console.error("Error shutting down sandboxes:", e);
+  }
+  app.exit(0);
 });

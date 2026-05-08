@@ -31,9 +31,15 @@ const sidebarAPI = {
     electronAPI.ipcRenderer.on("chat-response", (_, data) => callback(data));
   },
 
-  onMessagesUpdated: (callback: (messages: any[]) => void) => {
+  onMessagesUpdated: (callback: (messages: unknown[]) => void) => {
     electronAPI.ipcRenderer.on("chat-messages-updated", (_, messages) =>
-      callback(messages)
+      callback(messages),
+    );
+  },
+
+  onAgentToolEvent: (callback: (event: unknown) => void) => {
+    electronAPI.ipcRenderer.on("agent-tool-event", (_, event) =>
+      callback(event),
     );
   },
 
@@ -43,6 +49,10 @@ const sidebarAPI = {
 
   removeMessagesUpdatedListener: () => {
     electronAPI.ipcRenderer.removeAllListeners("chat-messages-updated");
+  },
+
+  removeAgentToolEventListener: () => {
+    electronAPI.ipcRenderer.removeAllListeners("agent-tool-event");
   },
 
   // Page content access

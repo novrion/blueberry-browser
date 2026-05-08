@@ -1,7 +1,13 @@
 import { useState, useEffect } from "react";
+import type { IpcRendererEvent } from "electron";
 
-export const useDarkMode = () => {
-  const [isDarkMode, setIsDarkMode] = useState(() => {
+interface UseDarkMode {
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+}
+
+export const useDarkMode = (): UseDarkMode => {
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     // Check if dark mode preference exists in localStorage
     const savedMode = localStorage.getItem("darkMode");
     if (savedMode !== null) {
@@ -30,7 +36,10 @@ export const useDarkMode = () => {
 
   // Listen for dark mode changes from other windows
   useEffect(() => {
-    const handleDarkModeUpdate = (_event: any, newDarkMode: boolean) => {
+    const handleDarkModeUpdate = (
+      _event: IpcRendererEvent,
+      newDarkMode: boolean,
+    ): void => {
       setIsDarkMode(newDarkMode);
     };
 
@@ -42,13 +51,13 @@ export const useDarkMode = () => {
       if (window.electron) {
         window.electron.ipcRenderer.removeListener(
           "dark-mode-updated",
-          handleDarkModeUpdate
+          handleDarkModeUpdate,
         );
       }
     };
   }, []);
 
-  const toggleDarkMode = () => {
+  const toggleDarkMode = (): void => {
     setIsDarkMode(!isDarkMode);
   };
 
