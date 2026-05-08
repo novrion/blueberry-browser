@@ -22,10 +22,10 @@
     - navigate (navigate page)
 
 ### Sandbox Rationale
-Blueberry has no persistence and is completely local but a real agentic browser like Strawberry would have cloud infra \\
-=> chats and their files are already stored in the cloud => no gain from running sandbox on local machine. \\
-Also, there is no native-performance cross-platform local VM without barriers to installation (like requiring docker desktop) \\
-=> so the solution is to have a cloud-hosted linux machine that handles the cross-platform issue. \\
+Blueberry has no persistence and is completely local but a real agentic browser like Strawberry would have cloud infra  
+=> chats and their files are already stored in the cloud => no gain from running sandbox on local machine.  
+Also, there is no native-performance cross-platform local VM without barriers to installation (like requiring docker desktop)  
+=> so the solution is to have a cloud-hosted linux machine that handles the cross-platform issue.  
 => adds network latency but is well worth it. If the agentic browser supported files in the GiB-range and required higher compute it would be nice with local compute, but there are major cross-platform issues and containerization issues. Better to abstract the sandbox as a network interface on the client-side instead.
 
 **E2B**: Easy out-of-the-box industry-standard cloud-hosted code execution sandbox
@@ -59,3 +59,48 @@ Also, there is no native-performance cross-platform local VM without barriers to
 - optimize MicroVM solution crazy (I LOVE RUST <3 and (hopefully) diffing cloud providers)
 - all the cloud-infra stuff like handling file persistence, auth, db, buckets, MicroVM auth, MicroVM networking, and handling how best to load chat-files into MicroVM (let AI do it? auto-load on chat open?)
 - codebase standards are inconsistent. I have never built an electron app before so unsure how best to structure files. So a maintainability cleanup would be necessary here.
+
+
+### Repo Layout
+
+```
+blueberry-browser/
+├── apps/
+│   └── browser/                          # Electron app (TypeScript)
+│       └── src/
+│           ├── main/                     # main process
+│           │   ├── ipc/                  # IPC event bus (renderer <-> main)
+│           │   ├── windows/              # BrowserWindow / Tab / SideBar / TopBar wiring
+│           │   └── services/
+│           │       ├── LLMClient.ts      # provider client + chat session
+│           │       └── ai/
+│           │           ├── run.ts        # ToolLoopAgent run loop
+│           │           ├── agents/       # agent factories (browser agent)
+│           │           ├── instructions/ # system prompts + tool-context injection
+│           │           ├── tools/
+│           │           │   ├── browser/  # get-page, modify-dom, navigate
+│           │           │   └── sandbox/  # python, bash, read-file, write-file
+│           │           └── lib/sandbox/  # backend impls: e2b.ts, microvm.ts (HTTP client)
+│           ├── preload/                  # Electron preload (contextBridge)
+│           └── renderer/                 # React UIs: sidebar (chat), topbar (tabs)
+│
+└── services/
+    └── sandbox/                          # self-hosted MicroVM sandbox (Rust workspace)
+        ├── orchestrator/                 # host HTTP server (axum)
+        │   └── src/
+        │       ├── main.rs               # entry, signal handling, warmup
+        │       ├── config.rs             # SANDBOX_* env -> Config
+        │       ├── routes.rs             # /sandbox + /exec + /file routes
+        │       ├── registry.rs           # active VM map + warm pool + idle reaper
+        │       ├── vm.rs                 # Vm: exec/read/write over vsock
+        │       ├── vsock.rs              # host-side vsock client
+        │       └── fc/                   # Firecracker process + management API
+        ├── guest-agent/                  # PID-1 agent inside each VM (musl static)
+        ├── proto/                        # shared wire types (Request/Response)
+        ├── scripts/
+        │   ├── build-rootfs.sh           # alpine + agent + python deps -> ext4
+        │   ├── fetch-kernel.sh           # download known-good vmlinux
+        │   └── bench-spinup.py           # boot-latency benchmark vs e2b
+        ├── Dockerfile
+        └── docker-compose.yml
+```
