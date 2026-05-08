@@ -3,7 +3,7 @@ import { electronApp } from "@electron-toolkit/utils";
 import { Window } from "./Window";
 import { AppMenu } from "./Menu";
 import { EventManager } from "./EventManager";
-import { shutdownSandboxManager } from "./LLMClient";
+import { shutdownSandbox } from "./ai";
 
 let mainWindow: Window | null = null;
 let eventManager: EventManager | null = null;
@@ -52,7 +52,7 @@ app.on("window-all-closed", () => {
 app.on("before-quit", async (event) => {
   event.preventDefault();
   try {
-    await shutdownSandboxManager();
+    await shutdownSandbox();
   } catch (e) {
     console.error("Error shutting down sandboxes:", e);
   }
