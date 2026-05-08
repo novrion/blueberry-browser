@@ -36,6 +36,10 @@ Also, there is no native-performance cross-platform local VM without barriers to
     - more infra to handle
 
 
+### Achieved
+- agent that can navigate pages, fill forms for you, research, and execute code in a sandbox to analyze data etc.
+
+
 ### Issues
 - MicroVM is still just an MVP.
     - It does not have networking (only works on localhost for now).
@@ -46,6 +50,10 @@ Also, there is no native-performance cross-platform local VM without barriers to
 
 - No cloud-infra
     - MVP for this challenge ignored all auth, cloud-infra etc... purely localhost
+
+- codebase maintainability note:
+    - not very clean right now
+    - never made electron app before so unsure of best file structure etc.
 
 
 ### TODO (if I were to continue)
